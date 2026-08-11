@@ -1,0 +1,26 @@
+{
+  "_comment": [
+    "Oyuncu figürlerinin kaynak dosya eşlemesi.",
+    "Anahtar: oyuncu id'si (src/lib/domain/players.seed.ts içindeki).",
+    "Değer: 'oyuncu gorseller' klasöründeki dosya adı.",
+    "Yeni figür ürettikçe buraya satır ekle ve 'npm run figurler' komutunu çalıştır.",
+    "Eşlemede olmayan oyunculara, mevcut görsellerden sırayla biri atanır."
+  ],
+  "map": {
+    "alper": "ChatGPT Image 11 Ağu 2026 14_36_29.png",
+    "taha": "ChatGPT Image 11 Ağu 2026 14_36_31.png",
+    "goktug": "ChatGPT Image 11 Ağu 2026 14_36_33.png",
+    "barkuz": "ChatGPT Image 11 Ağu 2026 14_36_34.png",
+    "baran": "ChatGPT Image 11 Ağu 2026 14_36_35.png",
+    "arif": "ChatGPT Image 11 Ağu 2026 14_36_36.png",
+    "servan": "ChatGPT Image 11 Ağu 2026 14_36_37.png",
+    "m-emre": "ChatGPT Image 11 Ağu 2026 14_36_40.png",
+    "mali": "ChatGPT Image 11 Ağu 2026 14_36_41.png",
+    "eren": "ChatGPT Image 11 Ağu 2026 14_36_43.png",
+    "utku": "ChatGPT Image 11 Ağu 2026 14_36_45.png",
+    "kamil-reis": "ChatGPT Image 11 Ağu 2026 14_36_46.png",
+    "akin": "ChatGPT Image 11 Ağu 2026 14_36_49.png",
+    "ugur": "ChatGPT Image 11 Ağu 2026 14_36_51.png",
+    "mustafa": "ChatGPT Image 11 Ağu 2026 14_36_53.png"
+  }
+}

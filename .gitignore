@@ -1,0 +1,38 @@
+# bağımlılıklar
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+
+# derleme çıktısı
+/.next/
+/out/
+/build
+*.tsbuildinfo
+next-env.d.ts
+
+# yerel lig verisi — yayında Supabase'e taşınacak (bkz. VERI-MIMARISI.md)
+/.data
+
+# ortam değişkenleri — SESSION_SECRET ve admin şifresi burada
+.env
+.env*.local
+
+# test ve araç çıktıları
+/coverage
+/.vercel
+*.pem
+
+# günlükler
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# işletim sistemi
+.DS_Store
+Thumbs.db
+
+# Next'in otomatik ürettiği ajan dosyaları (next.config.ts'te kapalı)
+/AGENTS.md
+/CLAUDE.md

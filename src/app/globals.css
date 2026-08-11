@@ -1,0 +1,149 @@
+@import "tailwindcss";
+
+/*
+  Macunköy Fantazi Ligi — tasarım sistemi.
+
+  Yön: gece maçı. Koyu, çim yeşiline çalan bir zemin; üstünde flaş gibi
+  parlayan neon vurgular. Kart seviyeleri fiyata göre bronz → gümüş → altın →
+  siyah (Macunköy Efsanesi) diye yükselir.
+
+  Uygulama tek temada (koyu) çalışır; halısaha uygulaması gündüz teması
+  istemiyor ve tek tema tasarımı çok daha tutarlı tutuyor.
+*/
+
+@theme {
+  --color-pitch-950: #04140c;
+  --color-pitch-900: #071c12;
+  --color-pitch-850: #0a2418;
+  --color-pitch-800: #0d2c1e;
+  --color-pitch-700: #14402c;
+  --color-pitch-600: #1c5a3d;
+
+  --color-ink-950: #05070a;
+  --color-ink-900: #0b1016;
+  --color-ink-850: #111820;
+  --color-ink-800: #18212b;
+  --color-ink-700: #26313e;
+  --color-ink-600: #3a4757;
+
+  --color-chalk: #f2f7f4;
+  --color-chalk-dim: #a8b6ae;
+  --color-chalk-faint: #6b7a72;
+
+  --color-neon: #4ade80;
+  --color-neon-bright: #86efac;
+  --color-neon-deep: #16a34a;
+
+  --color-flare: #fbbf24;
+  --color-flare-deep: #b45309;
+  --color-danger: #f43f5e;
+  --color-danger-deep: #9f1239;
+  --color-sky-cool: #38bdf8;
+  --color-violet-cool: #a78bfa;
+
+  --color-tier-bronze: #b07a4a;
+  --color-tier-silver: #b9c4cc;
+  --color-tier-gold: #e5b53d;
+  --color-tier-legend: #f0f0f0;
+
+  --font-sans: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+
+  --radius-card: 0.875rem;
+
+  --animate-pulse-ring: pulse-ring 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-shimmer: shimmer 2.5s linear infinite;
+  --animate-rise: rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes pulse-ring {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.06);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+html {
+  color-scheme: dark;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  min-height: 100dvh;
+  background:
+    radial-gradient(120% 80% at 50% -10%, var(--color-pitch-800) 0%, transparent 55%),
+    radial-gradient(90% 60% at 100% 100%, #0b1a2a 0%, transparent 60%),
+    var(--color-ink-950);
+  background-attachment: fixed;
+  color: var(--color-chalk);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+}
+
+/* Sayısal değerler tabloda hizalı dursun. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Kart yüzeylerindeki ince ışık çizgisi. */
+.edge-light {
+  box-shadow:
+    inset 0 1px 0 0 rgb(255 255 255 / 0.08),
+    0 1px 2px 0 rgb(0 0 0 / 0.4);
+}
+
+.glass {
+  background: color-mix(in oklab, var(--color-ink-900) 82%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+/* Yatayda kayan listelerde kaydırma çubuğunu gizle. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Odaklanma halkası — klavyeyle gezenler için her yerde görünür olsun. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-neon);
+  outline-offset: 2px;
+  border-radius: 0.375rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

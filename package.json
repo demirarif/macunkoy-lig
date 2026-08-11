@@ -1,0 +1,40 @@
+{
+  "name": "macunkoy-fl",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "figurler": "node scripts/import-figures.mjs",
+    "demo": "tsx --conditions=react-server --tsconfig tsconfig.json scripts/demo-verisi.ts",
+    "sifirla": "tsx --conditions=react-server --tsconfig tsconfig.json scripts/demo-verisi.ts reset",
+    "duman": "tsx --conditions=react-server --tsconfig tsconfig.json scripts/smoke.ts"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "framer-motion": "^13.1.0",
+    "jose": "^6.2.8",
+    "next": "^16.3.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "^16.3.0",
+    "tailwindcss": "^4",
+    "tsx": "^4.23.12",
+    "typescript": "^5",
+    "vitest": "^4.1.10"
+  }
+}
