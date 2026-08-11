@@ -1,0 +1,14 @@
+# Satır sonlarını depoda LF olarak normalleştir.
+# Windows'ta çalışırken git her eklemede "LF will be replaced by CRLF" uyarısı
+# veriyordu; bu dosya o gürültüyü kesiyor ve depo içeriğini platformdan
+# bağımsız tutuyor.
+* text=auto eol=lf
+
+# İkili dosyalara dokunma.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
