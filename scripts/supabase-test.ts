@@ -31,6 +31,17 @@ function step(n: number, label: string) {
   process.stdout.write(`${n}. ${label.padEnd(46, ".")} `);
 }
 
+/** Eski biçim JWT anahtarların içindeki rolü okumak için — doğrulama yapmaz. */
+function decodeJwt(token: string): string {
+  const payload = token.split(".")[1];
+  if (!payload) return "";
+  try {
+    return Buffer.from(payload, "base64url").toString("utf8");
+  } catch {
+    return "";
+  }
+}
+
 async function main() {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -51,9 +62,19 @@ async function main() {
     console.error("Örnek: https://mpwpoyfflhzftjcmnnbm.supabase.co\n");
     process.exit(1);
   }
-  if (key.length < 40) {
+  // Supabase iki biçim veriyor: yeni "sb_secret_..." ve eski JWT.
+  // Yanlışlıkla herkese açık anahtarın (anon / sb_publishable_) girilmesini yakala.
+  if (key.startsWith("sb_publishable_") || /"role":"anon"/.test(decodeJwt(key))) {
+    console.log("YANLIŞ ANAHTAR");
+    console.error(
+      "\nBu herkese açık (anon) anahtar. Gizli olanı kullan:\n" +
+        "  Project Settings > API keys > 'secret' ya da 'service_role'\n",
+    );
+    process.exit(1);
+  }
+  if (key.length < 30) {
     console.log("ŞÜPHELİ");
-    console.error("\nservice_role anahtarı çok kısa görünüyor. Doğru anahtarı kopyaladın mı?\n");
+    console.error("\nAnahtar çok kısa görünüyor. Tamamını kopyaladın mı?\n");
     process.exit(1);
   }
   console.log("tamam");
