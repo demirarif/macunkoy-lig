@@ -1,4 +1,13 @@
 -- ============================================================================
+-- BU DOSYAYI ŞİMDİ ÇALIŞTIRMANA GEREK YOK.
+--
+-- Kurulum için: supabase/kurulum.sql
+--
+-- Buradaki ilişkisel şema, ileride veriyi tek JSONB satırından ayrı tablolara
+-- bölmek istenirse diye hazır duruyor. Uygulama şu an bunu kullanmıyor.
+-- ============================================================================
+
+-- ============================================================================
 -- Macunköy Fantazi Ligi — Supabase (Postgres) şeması
 -- ============================================================================
 --

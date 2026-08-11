@@ -12,9 +12,12 @@
     "figurler": "node scripts/import-figures.mjs",
     "demo": "tsx --conditions=react-server --tsconfig tsconfig.json scripts/demo-verisi.ts",
     "sifirla": "tsx --conditions=react-server --tsconfig tsconfig.json scripts/demo-verisi.ts reset",
-    "duman": "tsx --conditions=react-server --tsconfig tsconfig.json scripts/smoke.ts"
+    "duman": "tsx --conditions=react-server --tsconfig tsconfig.json scripts/smoke.ts",
+    "dev:lan": "next dev -H 0.0.0.0",
+    "supabase:test": "tsx --conditions=react-server --tsconfig tsconfig.json scripts/supabase-test.ts"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.112.3",
     "bcryptjs": "^3.0.3",
     "framer-motion": "^13.1.0",
     "jose": "^6.2.8",

@@ -40,26 +40,51 @@ veritabanına sızan biri admin paneline giremesin istiyorum.
 
 ---
 
-## 2. Şu an nerede duruyor (ve neden geçici)
+## 2. Nerede duruyor
 
-Şu anda bütün lig tek bir JSON dosyasında: `.data/league.json`.
+Uygulama iki depoyla çalışabiliyor ve hangisini kullanacağını ortam değişkenleri
+belirliyor:
 
-Bunu bilerek böyle yaptım. Projeyi klonlayan biri `npm install && npm run dev`
-deyip hiçbir kurulum yapmadan çalışan bir lig görebilsin istedim. Tek makinede
-sorunsuz çalışıyor: yazmalar sıraya alınıyor, önce geçici dosyaya yazılıp sonra
-yerine taşınıyor (yazma yarıda kalırsa veri bozulmuyor), okumalar dosyanın
-değişiklik zamanına bakan bir önbellekten geçiyor.
+| Ortam | Depo | Ne zaman |
+|---|---|---|
+| Yerel geliştirme | `.data/league.json` | `SUPABASE_*` tanımlı değilse |
+| Yayın (Vercel) | Supabase Postgres | `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` doluysa |
 
-**Ama yayına alırken bu yetmez.** Vercel'de uygulama birden fazla sunucuda
-çalışıyor ve her sunucunun kendi geçici diski var. Ali'nin kadrosu bir sunucuya,
-Veli'nin kadrosu başka bir sunucuya yazılır; ikisi birbirini görmez. Üstelik
-sunucu yeniden başladığında disk silinir — bütün sezon uçar.
+Seçim `src/lib/db/store.ts` içinde yapılıyor; uygulamanın geri kalanı hangisinin
+çalıştığını bilmiyor.
 
-Bu yüzden **yayına almadan önce mutlaka gerçek bir veritabanına geçilmeli.**
+### Yerel: JSON dosyası
+
+Projeyi klonlayan biri `npm install && npm run dev` deyip hiçbir kurulum
+yapmadan çalışan bir lig görebilsin diye. Tek makinede sorunsuz: yazmalar sıraya
+alınıyor, önce geçici dosyaya yazılıp sonra yerine taşınıyor (yazma yarıda
+kalırsa veri bozulmuyor), okumalar dosyanın değişiklik zamanına bakan bir
+önbellekten geçiyor.
+
+**Yayında bu çalışmaz.** Vercel'de proje dizini salt okunur — ilk yazma denemesi
+`EROFS: read-only file system` ile patlar ve her sayfa 500 verir. `/tmp`'ye
+yazsak bile çözmez: her sunucu örneğinin kendi geçici diski var, veri bölünür ve
+her yeni dağıtımda silinir.
+
+### Yayın: Supabase, tek JSONB satırı
+
+Bütün lig `league_state` tablosunda **tek satır** hâlinde duruyor.
+
+**Neden tek satır, neden sekiz tabloya bölmedim:** Uygulama veriye yalnızca iki
+fonksiyonla dokunuyor — `readState` ve `mutate`. Bütün lig birkaç yüz kilobayt.
+40 kişilik bir ligde veriyi ayrı tablolara bölmenin pratik bir kazancı yok; buna
+karşılık kod çok daha basit kalıyor ve eşleme hatası riski sıfırlanıyor. Oyun
+mantığını hiç ellemeden veritabanına geçebildik. İleride gerekirse ilişkisel
+şemaya geçilir; `supabase/ileride-tam-sema.sql` hazır duruyor.
+
+**Eşzamanlı yazma nasıl çözülüyor:** Satırın bir `version` sayacı var. Yazarken
+"okuduğum sürüm hâlâ aynıysa yaz" diyoruz. Araya biri girmişse hiçbir satır
+güncellenmiyor; uygulama baştan okuyup tekrar deniyor (en fazla 6 kez). Böylece
+iki menajer aynı anda kadro kaydettiğinde biri diğerini ezmiyor.
 
 ---
 
-## 3. Ne istiyorum: Supabase
+## 3. Neden Supabase
 
 Supabase'i seçmemin sebepleri:
 
@@ -86,102 +111,100 @@ meraklı biri konsolu açıp başkasının kadrosunu okuyabilir ya da kendi puan
 değiştirmeyi deneyebilir. Bütün yetkiyi sunucuda tutunca böyle bir yüzey hiç
 oluşmuyor.
 
-Bu yüzden `schema.sql` içinde her tabloda RLS açık ve **hiçbir politika yok**.
+Bu yüzden `kurulum.sql` içinde tabloda RLS açık ve **hiçbir politika yok**.
 Politikasız + RLS açık = `service_role` dışında kimse geçemez. Kasıtlı.
 
 ---
 
-## 4. Tablolar ve neden öyle
+## 4. Veri neye benziyor
 
-Şemanın tamamı `supabase/schema.sql` içinde. Burada her tablonun neden o şekilde
-tasarlandığını anlatıyorum.
+Supabase tarafında tek tablo, tek satır var:
 
-### `league` — tek satırlık ayar tablosu
-
-Bütçe, puanlama katsayıları, fiyat algoritması parametreleri. `id = 1` kısıtıyla
-tek satır olmaya zorlanıyor.
-
-Puanlama ve fiyat ayarlarını **JSONB** olarak tutuyorum. Her katsayı için ayrı
-sütun açsaydım, admin panelinden bir ayar eklemek istediğimde migration yazmam
-gerekirdi. Bu ayarlar sık sık kurcalanacak; esnek olsun istiyorum.
-
-### `players` — 37 kişilik havuz
-
-`id` metin ve elle yazılmış (`goktug`, `kamil-reis`). UUID kullanmadım çünkü
-figür dosyaları `public/players/<id>.png` diye duruyor ve seed verisi bu id'lerle
-yazılı. Okunabilir olması işime geliyor.
-
-`slots` bir metin dizisi (`{'DEF','MID'}`). Çok mevkili oyuncular var — Arif hem
-defans hem orta saha hem forvet oynayabiliyor. Ayrı bir `player_positions`
-tablosu açmak bu boyutta gereksiz karmaşa olurdu.
-
-`base_price` ile `price` ayrı: biri sezon başı fiyatı, hiç değişmiyor; diğeri
-her hafta oynuyor.
-
-`dual_keeper` sadece Barkuz için ama alan olarak duruyor — ileride başka biri de
-kaleye geçmeye başlarsa işaretleriz.
-
-### `managers` — hesaplar
-
-`player_id` **benzersiz**. Bu tek satır bütün kayıt mantığımı taşıyor: bir isimle
-yalnızca bir hesap açılabilir. Kayıt formu diye bir şey yok; kişi ilk kez kendi
-ismiyle giriş yaptığında hesap kendiliğinden oluşuyor.
-
-`must_change_password`: ilk girişte şifre kişinin kendi ismi. Bu alan true
-olduğu sürece kendi şifresini belirlemesi isteniyor.
-
-`failed_attempts` ve `locked_until`: 6 yanlış denemeden sonra giriş 15 dakika
-kapanıyor. Şifreler kısa olabileceği için bu koruma gerekli.
-
-### `gameweeks` — haftalar
-
-Beş durumu var ve akış **tek yönlü**:
-
-```
-open  →  locked  →  teams  →  completed
-                      ↓
-                   holiday
+```sql
+league_state (
+  id          smallint     -- her zaman 1
+  version     bigint       -- iyimser kilit sayacı
+  data        jsonb        -- ligin tamamı
+  updated_at  timestamptz
+)
 ```
 
-`completed_at` doluysa hafta kilitli demektir. Geri açma yolu bilerek yok. Bir
-hafta tamamlandıktan sonra puanların değişmesini istemiyorum — grup içinde
-tartışma çıkarır.
+`data` içindeki yapı `src/lib/db/state.ts` dosyasındaki `LeagueState` tipinin
+birebir karşılığı:
 
-Takım listelerini (`team_a_ids`, `team_b_ids`) dizi olarak tutuyorum, ayrı bir
-tablo açmadım. Haftada 22 kayıt için ilişki tablosu kurmak bu boyutta fazla
-geliyor; dizi hem okunması hem yazması daha basit.
+```jsonc
+{
+  "version": 1,
+  "seasonName": "Sezon 1",
+  "config": {
+    "budget": 85,
+    "scoring": { /* puan katsayıları, reyting basamakları, çarpanlar */ },
+    "pricing": { /* fiyat algoritması parametreleri */ }
+  },
+  "players": [
+    { "id": "goktug", "name": "Göktuğ", "slots": ["FWD","MID"],
+      "basePrice": 15, "price": 15.2, "dualKeeper": false, "active": true }
+  ],
+  "managers": [
+    { "id": "mgr-goktug", "playerId": "goktug", "teamName": null,
+      "passwordHash": "$2b$12$...", "mustChangePassword": false,
+      "failedAttempts": 0, "lockedUntil": null, "createdAt": "...", "lastSeenAt": "..." }
+  ],
+  "gameweeks": [
+    { "id": "gw-1", "number": 1, "status": "completed",
+      "lockAt": "...", "matchAt": "...",
+      "promoPlayerIds": ["onur","mamadou","yusuf"],
+      "calledUpIds": [/* 22 kişi */], "teamAIds": [], "teamBIds": [],
+      "captainIds": ["alper","servan"],
+      "scoreA": 8, "scoreB": 5, "mvpPlayerId": "taha",
+      "stats": [
+        { "playerId": "alper", "played": true, "keptGoal": false,
+          "team": "A", "goals": 2, "rating": 8.5 }
+      ],
+      "completedAt": "..." }
+  ],
+  "squads": [
+    { "id": "sq-gw-1-mgr-goktug", "gameweekId": "gw-1", "managerId": "mgr-goktug",
+      "formationId": "denge", "source": "manual", "updatedAt": "...",
+      "picks": [ { "playerId": "talha", "slot": "GK" } ] }
+  ],
+  "priceHistory": [
+    { "gameweekNumber": 1, "playerId": "goktug", "price": 15.2 }
+  ]
+}
+```
 
-### `match_stats` — maç verisi
+Birkaç tasarım notu:
 
-Hafta + oyuncu birleşik anahtar. Bir oyuncunun bir haftada tek satırı olabilir.
+**Oyuncu id'leri metin ve elle yazılmış** (`goktug`, `kamil-reis`). UUID
+kullanmadım çünkü figür dosyaları `public/players/<id>.png` diye duruyor.
+Okunabilir olması işime geliyor.
 
-`kept_goal` alanı kritik. Fantazi tarafındaki "mevki bahsi" kuralı tamamen buna
-bakıyor: menajerin oyuncuyu koyduğu slot ile `kept_goal` uyuşmuyorsa gol puanı
-yanıyor. Admin'in tek yapması gereken o hafta kalede kimin oynadığını
+**`squads[].picks` içinde slot da tutuluyor.** Sadece oyuncu listesi yetmezdi:
+Barkuz'u kaleye mi forvete mi koyduğun puanı doğrudan değiştiriyor.
+
+**`stats[].keptGoal` kritik.** Fantazi tarafındaki "mevki bahsi" kuralı tamamen
+buna bakıyor. Admin'in tek yapması gereken o hafta kalede kimin oynadığını
 işaretlemek; gerisini sistem hesaplıyor.
 
-`played` alanı "kadroya girdi ama gelmedi" durumunu ayırıyor. Bu kişiyi seçen
-menajerler −5 yiyor.
+**`gameweeks[].completedAt` doluysa hafta kilitli.** Geri açma yolu bilerek yok.
 
-### `squads` + `squad_picks` — kadrolar
+**Şifreler bcrypt hash'i olarak duruyor**, düz metin hiçbir yerde yok.
 
-Burada ilişki tablosu kullandım çünkü hangi oyuncunun **hangi slota** konduğunu
-bilmem gerekiyor. Sadece oyuncu listesi yetmez: Barkuz'u kaleye mi forvete mi
-koyduğun puanı doğrudan değiştiriyor.
+Bu yapıyı SQL'den de sorgulayabilirsin:
 
-`source` alanı `manual` mi `rollover` mı olduğunu tutuyor. Kadro kurmayan
-menajerlere kilitte otomatik kadro yazılıyor; arayüzde "bu kadro geçen haftadan
-devretti" uyarısı bu alandan geliyor.
+```sql
+-- Lig özeti
+select jsonb_array_length(data->'players')  as oyuncu,
+       jsonb_array_length(data->'managers') as menajer,
+       version, updated_at
+from league_state;
 
-Hafta + menajer benzersiz: bir menajerin bir haftada tek kadrosu olur.
-
-### `price_history` — fiyat geçmişi
-
-Oyuncu sayfasındaki fiyat grafiği için. `gameweek_number = 0` sezon başı
-fiyatını tutuyor.
-
-Bu tabloyu bilerek ayrı tuttum: `players.price` sadece "şu anki fiyat"ı biliyor,
-geçmişi bilmiyor. İkisini karıştırmak istemedim.
+-- Oyuncuların güncel fiyatları
+select p->>'name' as isim, (p->>'price')::numeric as fiyat
+from league_state, jsonb_array_elements(data->'players') p
+order by fiyat desc;
+```
 
 ---
 
@@ -190,22 +213,25 @@ geçmişi bilmiyor. İkisini karıştırmak istemedim.
 ### Adım 1: Supabase projesi
 
 1. [supabase.com](https://supabase.com) → yeni proje
-2. Bölge olarak **Frankfurt** seç (Türkiye'ye en yakın, gecikme düşük olur)
+2. Bölge olarak **Frankfurt** seç (Türkiye'ye en yakın)
 3. Veritabanı şifresini bir yere kaydet
 
-### Adım 2: Şemayı çalıştır
+### Adım 2: Tabloyu kur
 
-Supabase panelinde **SQL Editor** → yeni sorgu → `supabase/schema.sql`
-dosyasının tamamını yapıştır → çalıştır.
+Supabase panelinde **SQL Editor** → **New query** → `supabase/kurulum.sql`
+dosyasının tamamını yapıştır → **Run**.
 
-Bu, bütün tabloları, RLS ayarlarını ve başlangıç lig ayarlarını kuruyor.
-Oyuncu havuzunu **bilerek** SQL'e yazmadım — tek doğru kaynak
+Tek seferlik. Tablo boş görünecek — uygulama ilk bağlandığında satırı kendisi
+oluşturup 37 oyuncu ve 1. hafta ile dolduruyor. Ayrı bir tohumlama betiği
+gerekmiyor.
+
+Oyuncu havuzunu **bilerek** SQL'e yazmadım: tek doğru kaynak
 `src/lib/domain/players.seed.ts`. İki yerde iki liste tutarsam er geç
 birbirinden kayarlar.
 
 ### Adım 3: Anahtarları al
 
-Supabase panelinde **Project Settings → API**:
+Supabase panelinde **Project Settings → API keys**:
 
 - `Project URL` → `SUPABASE_URL`
 - `service_role` anahtarı → `SUPABASE_SERVICE_ROLE_KEY`
@@ -214,54 +240,22 @@ Supabase panelinde **Project Settings → API**:
 > asla `NEXT_PUBLIC_` ön ekiyle tanımlanmamalı, asla depoya commit edilmemeli.
 > Sadece sunucu tarafı kodda ve Vercel'in ortam değişkenlerinde yaşayacak.
 
-### Adım 4: Kodu bağla
+### Adım 4: Yerelde dene
 
-Bu, projedeki tek gerçek geliştirme işi. Uygulamanın tamamı veriye
-`src/lib/db/store.ts` içindeki **iki fonksiyon** üzerinden erişiyor:
-
-```ts
-readState(): Promise<LeagueState>
-mutate<T>(fn: (state: LeagueState) => T): Promise<T>
-```
-
-Başka hiçbir dosya doğrudan veriye dokunmuyor. Bu yüzden Supabase'e geçiş,
-bu iki fonksiyonun içini değiştirmekten ibaret. Sayfalar, servisler, puanlama
-motoru — hiçbiri değişmiyor.
-
-İki yol var:
-
-**A) Basit yol — tabloları oku, tek nesne kur.**
-`readState` bütün tabloları çekip `LeagueState` şeklinde birleştirir, `mutate`
-değişen kısımları geri yazar. Yazmalarda çakışma olmasın diye Postgres
-tarafında bir advisory lock kullanılır. Bu, en az kod değişikliğiyle çalışan
-yol ve bizim ölçeğimizde fazlasıyla yeterli.
-
-**B) Doğru yol — hedeflenmiş sorgular.**
-Zamanla `readState` yerine ihtiyaca göre sorgular yazılır (sadece açık haftayı
-çek, sadece bir menajerin kadrosunu çek). Daha verimli ama daha çok iş.
-
-**Benim tercihim A ile başlamak.** 40 kişilik bir ligde bütün state birkaç yüz
-kilobayt; her istekte çekmek sorun değil. İhtiyaç olursa sonra B'ye geçilir.
-
-Gereken paketler:
+`.env.local` içine iki değeri yaz, sonra:
 
 ```bash
-npm install @supabase/supabase-js
+npm run supabase:test
 ```
 
-(Şu an bu paket bağımlılıklarda yok — kullanılmadığı için kaldırdım. Geçişi
-yapan kişi kurar.)
+Bu betik sırayla ortam değişkenlerini, tabloya erişimi, ilk satırın
+oluşturulmasını ve yazma yetkisini kontrol ediyor. Bir şey ters giderse hangi
+adımda ve neden takıldığını söylüyor.
 
-### Adım 5: Oyuncu havuzunu aktar
-
-Şema kurulduktan sonra `players` tablosu boş olacak. Bir kerelik bir betikle
-`SEED_PLAYERS` listesini tabloya yazmak gerekiyor. `scripts/` altına
-`seed-supabase.ts` diye bir betik eklenip `npm run seed` ile çalıştırılabilir.
-
-### Adım 6: Vercel
+### Adım 5: Vercel
 
 1. Depoyu Vercel'e bağla
-2. Ortam değişkenlerini gir:
+2. **Settings → Environment Variables** altına beşini de gir:
 
 | Değişken | Ne |
 |---|---|
@@ -271,7 +265,12 @@ yapan kişi kurar.)
 | `SUPABASE_URL` | Supabase proje adresi |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service role anahtarı |
 
-3. Deploy
+3. **Redeploy** (ortam değişkenleri yalnızca yeni dağıtımlara uygulanır)
+
+> Bu beş değişken eksikse ne olur:
+> `SESSION_SECRET` yoksa her sayfa 500 verir. `SUPABASE_*` yoksa uygulama dosya
+> deposuna düşmeye çalışır ve Vercel'in salt okunur diskinde `EROFS` hatasıyla
+> yine 500 verir. `ADMIN_*` yoksa sadece admin girişi çalışmaz.
 
 ---
 
@@ -295,14 +294,14 @@ hem de yeni sezona geçerken geçmişi arşivleme yolu olur.
 
 Sezon bittiğinde yapılacaklar:
 
-1. Bütün ligi dışa aktar, arşivle
-2. `gameweeks`, `match_stats`, `squads`, `squad_picks`, `price_history`
-   tablolarını boşalt
-3. `players.price` değerlerini `base_price` ile eşitle (fiyatlar sıfırlansın)
-4. İstenirse `base_price` değerleri geçen sezonun performansına göre elle
+1. `league_state.data` içeriğini kopyalayıp arşivle (Supabase panelinden tek
+   sorguyla alınır)
+2. `data` içindeki `gameweeks`, `squads`, `priceHistory` dizilerini boşalt
+3. Her oyuncunun `price` değerini `basePrice` ile eşitle (fiyatlar sıfırlansın)
+4. İstenirse `basePrice` değerleri geçen sezonun performansına göre elle
    güncellensin
-5. `managers` tablosuna **dokunma** — hesaplar ve şifreler kalsın
-6. `league.season_name` güncellensin
+5. `managers` dizisine **dokunma** — hesaplar ve şifreler kalsın
+6. `seasonName` güncellensin
 
 Bunun için admin paneline bir "yeni sezon başlat" akışı eklenebilir. Şu an yok;
 ilk sezon bitmeden gerekmiyor.

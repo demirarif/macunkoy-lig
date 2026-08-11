@@ -366,6 +366,8 @@ npm run sifirla
 | `npm run sifirla` | Ligi tertemiz sıfırlar |
 | `npm run figurler` | Oyuncu görsellerini işleyip `public/players/`'a yazar |
 | `npm run duman` | Çalışan sunucudaki bütün sayfaları gezip kontrol eder |
+| `npm run supabase:test` | Supabase bağlantısını uçtan uca dener |
+| `npm run dev:lan` | Sunucuyu ağa açar (telefondan bakmak için) |
 
 ### Ortam değişkenleri
 
@@ -450,7 +452,10 @@ src/
     squad.ts             Kadro doğrulama ve otomatik kadro
     *.test.ts            34 test
 
-  lib/db/              Veri katmanı (bkz. VERI-MIMARISI.md)
+  lib/db/              Veri katmanı — store.ts ortama göre depo seçer
+    store.ts             Tek kapı: readState / mutate
+    file-store.ts        Yerel geliştirme (.data/league.json)
+    supabase-store.ts    Yayın (Postgres, tek JSONB satırı)
   lib/services/        Haftalık akış, lig tablosu, maç raporları
   lib/auth/            Oturum, hesap, şifre
   lib/ui/              Kart seviyeleri ve renkler
@@ -467,7 +472,9 @@ scripts/
   demo-verisi.ts       Demo verisi + uçtan uca akış testi
   smoke.ts             Bütün sayfaları gezen duman testi
 
-supabase/schema.sql    Yayına alırken kullanılacak Postgres şeması
+supabase/
+  kurulum.sql          Yayın için çalıştırılacak SQL (tek tablo)
+  ileride-tam-sema.sql İleride ilişkisel şemaya geçilirse
 VERI-MIMARISI.md       Verinin nasıl tutulduğu ve Supabase'e geçiş
 ```
 
@@ -479,16 +486,38 @@ ve testler seni koruyor.
 
 ## Yayına alma
 
-**Veri tarafı için önce [VERI-MIMARISI.md](VERI-MIMARISI.md) dosyasını oku.**
-Şu anki JSON dosyası tek sunucuda çalışır ama Vercel gibi dağıtık bir ortamda
-veriyi böler. O belge neyin nasıl kurulacağını adım adım anlatıyor.
+**Ayrıntılı anlatım: [VERI-MIMARISI.md](VERI-MIMARISI.md)**
 
-Kısaca:
+Uygulama iki depoyla çalışabiliyor ve hangisini kullanacağını ortam değişkenleri
+belirliyor:
 
-1. Supabase'de proje aç, `supabase/schema.sql` dosyasını çalıştır
-2. `src/lib/db/store.ts` içindeki iki fonksiyonun Supabase sürümünü yaz
-3. Vercel'e bağla, ortam değişkenlerini gir
-4. `ADMIN_PASSWORD`'ü mutlaka değiştir
+| Ortam | Depo | Ne zaman |
+|---|---|---|
+| Yerel | `.data/league.json` | `SUPABASE_*` tanımlı değilse |
+| Yayın | Supabase Postgres | `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` doluysa |
+
+Dosya deposu Vercel'de **çalışmaz** — proje dizini salt okunur, ilk yazmada
+`EROFS` alır ve her sayfa 500 verir. Yayında Supabase şart.
+
+### Adımlar
+
+1. Supabase'de proje aç (bölge: Frankfurt)
+2. **SQL Editor** → `supabase/kurulum.sql` dosyasını yapıştır → **Run**
+3. **Project Settings → API keys**'ten `Project URL` ve `service_role`
+   anahtarını al
+4. `.env.local` içine yaz, `npm run supabase:test` ile dene
+5. Vercel'de beş ortam değişkenini gir, **Redeploy**
+
+| Değişken | Zorunlu | Ne |
+|---|---|---|
+| `SESSION_SECRET` | evet | En az 32 karakter. Değişirse herkesin oturumu kapanır. |
+| `ADMIN_USERNAME` | evet | Admin kullanıcı adı |
+| `ADMIN_PASSWORD` | evet | Yayına almadan önce **mutlaka değiştir** |
+| `SUPABASE_URL` | yayında | Supabase proje adresi |
+| `SUPABASE_SERVICE_ROLE_KEY` | yayında | Tam yetkili anahtar — asla tarayıcıya gitmemeli |
+
+Tablo kurulduktan sonra boş görünür; uygulama ilk bağlandığında satırı kendisi
+oluşturup 37 oyuncu ve 1. hafta ile doldurur. Ayrı tohumlama betiği gerekmez.
 
 ### Güvenlik
 

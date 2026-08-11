@@ -1,91 +1,55 @@
 import "server-only";
-import fs from "node:fs/promises";
-import path from "node:path";
-import { initialState, type LeagueState } from "./state";
+import type { LeagueState } from "./state";
+import * as fileStore from "./file-store";
+import * as supabaseStore from "./supabase-store";
 
 /**
- * Veri katmanı.
+ * Veri katmanının tek kapısı.
  *
- * Şu an tek bir JSON dosyası kullanıyoruz: proje `npm run dev` dedikten sonra
- * hiçbir kurulum gerektirmeden çalışsın diye. Supabase'e geçince bu dosyanın
- * yerini `supabase-store.ts` alacak; dışarıya açılan `readState` / `mutate`
- * arayüzü aynı kalacağı için uygulama kodunun tek satırı değişmeyecek.
- */
-
-const DATA_DIR = path.join(process.cwd(), ".data");
-const DATA_FILE = path.join(DATA_DIR, "league.json");
-
-/**
- * Aynı anda gelen iki isteğin birbirinin yazdığını ezmesini engelleyen basit kuyruk.
- * Tek süreçte çalışan dev sunucusu için yeterli; Supabase'te bu işi veritabanı devralacak.
- */
-let writeChain: Promise<unknown> = Promise.resolve();
-
-/**
- * Bellek önbelleği, dosyanın değişiklik zamanına bağlı.
+ * Uygulamanın tamamı veriye yalnızca buradaki iki fonksiyonla dokunuyor:
+ * `readState` ve `mutate`. Hangi deponun kullanılacağını ortam belirliyor:
  *
- * Sadece "en son okuduğumdan beri değişti mi" kontrolü yapıyoruz; böylece
- * `npm run demo` gibi başka bir süreç dosyayı değiştirdiğinde sunucu bayat
- * veri göstermiyor. Her istekte JSON.parse etmenin de önüne geçiyor.
+ *   SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY tanımlıysa  →  Supabase (yayın)
+ *   tanımlı değilse                                       →  .data/league.json (yerel)
+ *
+ * Böylece projeyi klonlayan biri hiçbir kurulum yapmadan çalıştırabiliyor,
+ * yayında ise gerçek veritabanı devreye giriyor. Seçim her çağrıda yapılıyor
+ * (modül yüklenirken değil) ki betikler ve testler ortamı sonradan
+ * ayarlayabilsin.
  */
-let cache: { state: LeagueState; mtimeMs: number } | null = null;
-
-async function loadFromDisk(): Promise<LeagueState> {
-  try {
-    const stat = await fs.stat(DATA_FILE);
-    if (cache && cache.mtimeMs === stat.mtimeMs) return cache.state;
-    const raw = await fs.readFile(DATA_FILE, "utf8");
-    const state = JSON.parse(raw) as LeagueState;
-    cache = { state, mtimeMs: stat.mtimeMs };
-    return state;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    const fresh = initialState();
-    await writeToDisk(fresh);
-    return fresh;
-  }
+function impl() {
+  const useSupabase = Boolean(
+    process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY,
+  );
+  return useSupabase ? supabaseStore : fileStore;
 }
 
-async function writeToDisk(state: LeagueState): Promise<void> {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  // Önce geçici dosyaya yaz, sonra yerine taşı: yazma yarıda kalırsa
-  // eldeki veri bozulmasın.
-  const tmp = `${DATA_FILE}.${process.pid}.tmp`;
-  await fs.writeFile(tmp, JSON.stringify(state, null, 2), "utf8");
-  await fs.rename(tmp, DATA_FILE);
-  const stat = await fs.stat(DATA_FILE);
-  cache = { state, mtimeMs: stat.mtimeMs };
+/** Hangi deponun kullanıldığı — açılış günlüğü ve sağlık kontrolü için. */
+export function activeStore(): "supabase" | "dosya" {
+  return process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+    ? "supabase"
+    : "dosya";
 }
 
-export async function readState(): Promise<LeagueState> {
-  return loadFromDisk();
+export function readState(): Promise<LeagueState> {
+  return impl().readState();
 }
 
 /**
  * Durumu güvenli biçimde değiştirir.
  *
- * `fn` state'in bir kopyasını alır ve üzerinde serbestçe oynayabilir;
- * dönen değer kalıcı hâle gelir. `fn` bir sonuç döndürmek isterse
- * `[state, result]` çifti yerine kapanış değişkeni kullanmak daha okunaklı.
+ * `fn` state'in bir kopyasını alır ve üzerinde serbestçe oynar; dönen değer
+ * kalıcı hâle gelir. `fn` hata fırlatırsa hiçbir şey yazılmaz.
+ *
+ * Not: Supabase deposunda yazma çakışması olursa `fn` yeniden çalıştırılır.
+ * Bu yüzden `fn` yalnızca state üzerinde çalışmalı, dışarıya yan etkisi
+ * olmamalı (ör. şifre hash'leme mutate dışında yapılıyor).
  */
-export async function mutate<T>(
-  fn: (state: LeagueState) => T | Promise<T>,
-): Promise<T> {
-  const run = async (): Promise<T> => {
-    const current = await readState();
-    const draft = structuredClone(current);
-    const result = await fn(draft);
-    await writeToDisk(draft);
-    return result;
-  };
-  const next = writeChain.then(run, run);
-  // Zincirin bir hatada kopmaması için hatayı yutarak devam ettiriyoruz;
-  // hata yine de çağırana iletilir.
-  writeChain = next.catch(() => undefined);
-  return next;
+export function mutate<T>(fn: (state: LeagueState) => T | Promise<T>): Promise<T> {
+  return impl().mutate(fn);
 }
 
 /** Testler ve "sezonu sıfırla" için. */
-export async function resetState(state: LeagueState = initialState()): Promise<void> {
-  await writeToDisk(state);
+export function resetState(state?: LeagueState): Promise<void> {
+  return state === undefined ? impl().resetState() : impl().resetState(state);
 }
